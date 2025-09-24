@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced IMEI Info Tool v5</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- Base & Original Styles --- */
+        body {
+            font-family: 'Fira-Code', monospace;
+            background-color: #000;
+            color: #c9d1d9;
+        }
+        .main-content-wrapper {
+            position: relative;
+            z-index: 10;
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0d1117; }
+        ::-webkit-scrollbar-thumb { background: #8A2BE2; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ff00de; }
+
+        .result-table td { padding: 10px 15px; border-bottom: 1px solid #30363d; }
+        .result-table td:first-child { font-weight: bold; color: #58a6ff; width: 30%; }
+        .tab-button { transition: all 0.3s ease-in-out; border-bottom: 2px solid transparent; }
+        .tab-button.active { border-bottom-color: #c000ff; color: #c000ff; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+
+        /* --- Integrated Matrix Rain CSS (for background) --- */
+        .matrix-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; display: flex; overflow: hidden; z-index: -1; }
+        .matrix-pattern { position: relative; width: 1000px; height: 100%; flex-shrink: 0; }
+        .matrix-column { position: absolute; top: -100%; width: 20px; height: 100%; font-size: 16px; line-height: 18px; font-weight: bold; animation: fall linear infinite; white-space: nowrap; }
+        .matrix-column::before { content: "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"; position: absolute; top: 0; left: 0; background: linear-gradient( to bottom, #ffffff 0%, #ffffff 5%, #00ff41 10%, #00ff41 20%, #00dd33 30%, #00bb22 40%, #009911 50%, #007700 60%, #005500 70%, #003300 80%, rgba(0, 255, 65, 0.5) 90%, transparent 100% ); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; writing-mode: vertical-lr; letter-spacing: 1px; }
+        .matrix-column:nth-child(1){left:0px;animation-delay:-2.5s;animation-duration:3s}.matrix-column:nth-child(2){left:25px;animation-delay:-3.2s;animation-duration:4s}.matrix-column:nth-child(3){left:50px;animation-delay:-1.8s;animation-duration:2.5s}.matrix-column:nth-child(4){left:75px;animation-delay:-2.9s;animation-duration:3.5s}.matrix-column:nth-child(5){left:100px;animation-delay:-1.5s;animation-duration:3s}.matrix-column:nth-child(6){left:125px;animation-delay:-3.8s;animation-duration:4.5s}.matrix-column:nth-child(7){left:150px;animation-delay:-2.1s;animation-duration:2.8s}.matrix-column:nth-child(8){left:175px;animation-delay:-2.7s;animation-duration:3.2s}.matrix-column:nth-child(9){left:200px;animation-delay:-3.4s;animation-duration:3.8s}.matrix-column:nth-child(10){left:225px;animation-delay:-1.9s;animation-duration:2.7s}.matrix-column:nth-child(11){left:250px;animation-delay:-3.6s;animation-duration:4.2s}.matrix-column:nth-child(12){left:275px;animation-delay:-2.3s;animation-duration:3.1s}.matrix-column:nth-child(13){left:300px;animation-delay:-3.1s;animation-duration:3.6s}.matrix-column:nth-child(14){left:325px;animation-delay:-2.6s;animation-duration:2.9s}.matrix-column:nth-child(15){left:350px;animation-delay:-3.7s;animation-duration:4.1s}.matrix-column:nth-child(16){left:375px;animation-delay:-2.8s;animation-duration:3.3s}.matrix-column:nth-child(17){left:400px;animation-delay:-3.3s;animation-duration:3.7s}.matrix-column:nth-child(18){left:425px;animation-delay:-2.2s;animation-duration:2.6s}.matrix-column:nth-child(19){left:450px;animation-delay:-3.9s;animation-duration:4.3s}.matrix-column:nth-child(20){left:475px;animation-delay:-2.4s;animation-duration:3.4s}.matrix-column:nth-child(21){left:500px;animation-delay:-1.7s;animation-duration:2.4s}.matrix-column:nth-child(22){left:525px;animation-delay:-3.5s;animation-duration:3.9s}.matrix-column:nth-child(23){left:550px;animation-delay:-2s;animation-duration:3s}.matrix-column:nth-child(24){left:575px;animation-delay:-4s;animation-duration:4.4s}.matrix-column:nth-child(25){left:600px;animation-delay:-1.6s;animation-duration:2.3s}.matrix-column:nth-child(26){left:625px;animation-delay:-3s;animation-duration:3.5s}.matrix-column:nth-child(27){left:650px;animation-delay:-3.8s;animation-duration:4s}.matrix-column:nth-child(28){left:675px;animation-delay:-2.5s;animation-duration:2.8s}.matrix-column:nth-child(29){left:700px;animation-delay:-3.2s;animation-duration:3.6s}.matrix-column:nth-child(30){left:725px;animation-delay:-2.7s;animation-duration:3.2s}.matrix-column:nth-child(31){left:750px;animation-delay:-1.8s;animation-duration:2.7s}.matrix-column:nth-child(32){left:775px;animation-delay:-3.6s;animation-duration:4.1s}.matrix-column:nth-child(33){left:800px;animation-delay:-2.1s;animation-duration:3.1s}.matrix-column:nth-child(34){left:825px;animation-delay:-3.4s;animation-duration:3.7s}.matrix-column:nth-child(35){left:850px;animation-delay:-2.8s;animation-duration:2.9s}.matrix-column:nth-child(36){left:875px;animation-delay:-3.7s;animation-duration:4.2s}.matrix-column:nth-child(37){left:900px;animation-delay:-2.3s;animation-duration:3.3s}.matrix-column:nth-child(38){left:925px;animation-delay:-1.9s;animation-duration:2.5s}.matrix-column:nth-child(39){left:950px;animation-delay:-3.5s;animation-duration:3.8s}.matrix-column:nth-child(40){left:975px;animation-delay:-2.6s;animation-duration:3.4s}
+        .matrix-column:nth-child(odd)::before{content:"アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン123456789"}.matrix-column:nth-child(even)::before{content:"ガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポヴァィゥェォャュョッABCDEFGHIJKLMNOPQRSTUVWXYZ"}.matrix-column:nth-child(3n)::before{content:"アカサタナハマヤラワイキシチニヒミリウクスツヌフムユルエケセテネヘメレオコソトノホモヨロヲン0987654321"}.matrix-column:nth-child(4n)::before{content:"ンヲロヨモホノトソコオレメヘネテセケエルユムフヌツスクウリミヒニチシキイワラヤマハナタサカア"}.matrix-column:nth-child(5n)::before{content:"ガザダバパギジヂビピグズヅブプゲゼデベペゴゾドボポヴァィゥェォャュョッ!@#$%^&*()_+-=[]{}|;:,.<>?"}
+        @keyframes fall{0%{transform:translateY(-10%);opacity:1}100%{transform:translateY(200%);opacity:0}}
+        @media (max-width:768px){.matrix-column{font-size:14px;line-height:16px;width:18px}} @media (max-width:480px){.matrix-column{font-size:12px;line-height:14px;width:15px}}
+
+        /* --- Integrated Neon Globe CSS (for header) --- */
+        #globe-visual-container { display: flex; justify-content: center; align-items: center; margin-bottom: -4rem; transform: scale(0.6); }
+        .loader-container{position:relative;width:400px;height:400px;display:flex;justify-content:center;align-items:center;perspective:800px;transform-style:preserve-3d;z-index:10}.hologram-platform{position:absolute;width:300px;height:60px;bottom:-80px;border-radius:50%;background:radial-gradient(ellipse,rgba(0,221,255,.3) 0%,rgba(0,0,0,0) 70%);box-shadow:0 0 30px rgba(0,221,255,.4);transform:rotateX(60deg);filter:blur(8px);animation:platform-glow 4s infinite alternate}.platform-rings{position:absolute;width:300px;height:60px;bottom:-80px;transform:rotateX(60deg)}.platform-ring{position:absolute;top:0;left:0;width:100%;height:100%;border-radius:50%;border:2px solid transparent;opacity:.4;animation:platform-ring-pulse 4s infinite alternate}.platform-ring:nth-child(1){border-color:rgba(0,221,255,.4);animation-delay:-1s}.platform-ring:nth-child(2){width:85%;height:85%;top:7.5%;left:7.5%;border-color:rgba(255,0,255,.4);animation-delay:-2s}.platform-ring:nth-child(3){width:70%;height:70%;top:15%;left:15%;border-color:rgba(0,221,255,.4);animation-delay:-3s}@keyframes platform-ring-pulse{0%{transform:scale(1);opacity:.2}100%{transform:scale(1.05);opacity:.6}}@keyframes platform-glow{0%{box-shadow:0 0 30px rgba(0,221,255,.4);background:radial-gradient(ellipse,rgba(0,221,255,.3) 0%,rgba(0,0,0,0) 70%)}100%{box-shadow:0 0 50px rgba(255,0,255,.6);background:radial-gradient(ellipse,rgba(255,0,255,.3) 0%,rgba(0,0,0,0) 70%)}}.holo-container{position:relative;width:200px;height:200px;transform-style:preserve-3d;animation:float-container 6s infinite ease-in-out}@keyframes float-container{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}}.holo-sphere{position:relative;width:180px;height:180px;left:15px;top:15px;transform-style:preserve-3d;animation:rotate 15s infinite linear}.holo-ring{position:absolute;top:0;left:0;width:100%;height:100%;border-radius:50%;border:2px solid transparent;box-shadow:0 0 20px rgba(255,0,222,.5),0 0 20px rgba(0,221,255,.5);filter:blur(1px);animation:pulse 3s infinite ease-in-out alternate;transform-style:preserve-3d}.holo-ring:nth-child(1){border-top-color:#ff00de;border-bottom-color:#00ddff;animation-delay:-.5s}.holo-ring:nth-child(2){border-top-color:#00ddff;border-bottom-color:#ff00de;animation-delay:-1s;transform:rotateX(60deg)}.holo-ring:nth-child(3){border-top-color:#ff00de;border-bottom-color:#00ddff;animation-delay:-1.5s;transform:rotateY(60deg)}.holo-ring:nth-child(4){width:90%;height:90%;top:5%;left:5%;border-left-color:#00ff77;border-right-color:#ff5500;animation-delay:-2s;transform:rotateZ(45deg)}.holo-ring:nth-child(5){width:110%;height:110%;top:-5%;left:-5%;border-left-color:#ff00b3;border-right-color:#3300ff;animation-delay:-2.5s;transform:rotateX(30deg) rotateY(30deg)}.holo-particles{position:absolute;width:100%;height:100%;transform-style:preserve-3d}.holo-particle{position:absolute;background:radial-gradient(circle,rgba(255,255,255,.9) 0%,rgba(255,255,255,0) 70%);border-radius:50%;filter:blur(1px);opacity:0;transform-style:preserve-3d;animation:particle-float 4s infinite ease-in-out}.holo-particle:nth-child(1){width:8px;height:8px;top:20%;left:30%;animation-delay:.1s}.holo-particle:nth-child(2){width:6px;height:6px;top:70%;left:60%;animation-delay:.7s}.holo-particle:nth-child(3){width:10px;height:10px;top:40%;left:80%;animation-delay:1.3s}.holo-particle:nth-child(4){width:5px;height:5px;top:80%;left:25%;animation-delay:1.9s}.holo-particle:nth-child(5){width:7px;height:7px;top:30%;left:50%;animation-delay:2.5s}.holo-particle:nth-child(6){width:9px;height:9px;top:60%;left:40%;animation-delay:3.1s}.holo-particle:nth-child(7){width:4px;height:4px;top:50%;left:75%;animation-delay:3.7s}.holo-particle:nth-child(8){width:8px;height:8px;top:25%;left:85%;animation-delay:4.3s}@keyframes particle-float{0%,100%{transform:translateZ(0) translateX(0) translateY(0) scale(.8);opacity:0}25%{opacity:1;transform:translateZ(30px) translateX(10px) translateY(-10px) scale(1)}50%{transform:translateZ(60px) translateX(20px) translateY(-20px) scale(1.2);opacity:.8}75%{opacity:.4;transform:translateZ(30px) translateX(10px) translateY(-10px) scale(1)}}.glitch-effect{position:absolute;width:100%;height:100%;top:0;left:0;opacity:0;animation:glitch 7s infinite;pointer-events:none;z-index:12;background:linear-gradient(45deg,rgba(255,0,222,.3) 0%,transparent 20%,rgba(0,221,255,.3) 40%,transparent 60%,rgba(255,0,222,.3) 80%,transparent 100%)}@keyframes glitch{0%,100%{opacity:0}94%,96%{opacity:0}94.5%{opacity:.8;transform:translate(5px,-5px) skew(-5deg,5deg)}95%{opacity:.8;transform:translate(-5px,5px) skew(5deg,-5deg)}95.5%{opacity:.8;transform:translate(5px,0) skew(-5deg,0)}}@keyframes rotate{0%{transform:rotateX(0deg) rotateY(0deg) rotateZ(0deg)}100%{transform:rotateX(360deg) rotateY(360deg) rotateZ(360deg)}}.code-lines{position:absolute;width:200%;height:200%;top:-50%;left:-50%;pointer-events:none;perspective:500px;transform-style:preserve-3d;z-index:8}.code-line{position:absolute;font-size:10px;color:rgba(0,221,255,.7);white-space:nowrap;text-shadow:0 0 5px rgba(0,221,255,.3);animation:code-scroll 15s infinite linear;opacity:0}.code-line:nth-child(1){top:10%;animation-duration:14s;color:#00ddff}.code-line:nth-child(2){top:20%;animation-duration:15s;animation-delay:-1s}.code-line:nth-child(3){top:30%;animation-duration:16s;animation-delay:-2s;color:#ff00de}.code-line:nth-child(4){top:40%;animation-duration:14s;animation-delay:-3s}.code-line:nth-child(5){top:50%;animation-duration:10s;animation-delay:-3s}.code-line:nth-child(6){top:60%;animation-duration:13s;animation-delay:-7s;color:#ff00de}.code-line:nth-child(7){top:70%;animation-duration:11s;animation-delay:-4s}.code-line:nth-child(8){top:80%;animation-duration:16s;animation-delay:-9s;color:#ff00de}@keyframes code-scroll{0%{transform:translateX(200px) rotateY(20deg);opacity:0}10%{opacity:.7}90%{opacity:.7}100%{transform:translateX(-500px) rotateY(20deg);opacity:0}}.loading-text{position:absolute;bottom:-85px;text-align:center;font-size:14px;letter-spacing:2px;color:rgba(255,255,255,.8);text-shadow:0 0 10px rgba(0,221,255,.6);animation:text-flicker 2s infinite}@keyframes text-flicker{0%,100%{opacity:1}8%,10%{opacity:.6}9%{opacity:.9}52%,54%{opacity:.6}53%{opacity:.9}}.progress-container{position:absolute;bottom:-110px;width:200px;height:4px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden}.progress-bar{height:100%;width:0;background:linear-gradient(90deg,#00ddff,#ff00de);box-shadow:0 0 10px rgba(0,221,255,.7);animation:progress 5s linear infinite}@keyframes progress{0%{width:0}20%{width:20%}40%{width:38%}50%{width:52%}60%{width:65%}75%{width:82%}100%{width:100%}}.corner-decorations{position:absolute;width:300px;height:300px;pointer-events:none}.corner{position:absolute;width:20px;height:20px;border-style:solid;border-width:2px;border-color:rgba(0,221,255,.5);animation:corner-pulse 3s infinite alternate}.corner:nth-child(1){top:0;left:0;border-right:none;border-bottom:none}.corner:nth-child(2){top:0;right:0;border-left:none;border-bottom:none}.corner:nth-child(3){bottom:0;left:0;border-right:none;border-top:none}.corner:nth-child(4){bottom:0;right:0;border-left:none;border-top:none}@keyframes corner-pulse{0%{border-color:rgba(0,221,255,.5);width:20px;height:20px}100%{border-color:rgba(255,0,222,.5);width:30px;height:30px}}.projection-beams{position:absolute;width:300px;height:300px;bottom:-80px;transform-style:preserve-3d;opacity:.3;pointer-events:none}.beam{position:absolute;width:1px;height:250px;background:linear-gradient(0deg,rgba(0,221,255,.8) 0%,rgba(255,255,255,.4) 40%,rgba(0,0,0,0) 100%);bottom:0;transform-origin:bottom;filter:blur(1px);opacity:.7}.beam:nth-child(1){left:30%;transform:rotateY(10deg) rotateX(-30deg);animation:beam-flicker 4s infinite alternate;animation-delay:.5s}.beam:nth-child(2){left:45%;transform:rotateY(-5deg) rotateX(-25deg);animation:beam-flicker 3s infinite alternate;animation-delay:1.5s}.beam:nth-child(3){left:55%;transform:rotateY(5deg) rotateX(-25deg);animation:beam-flicker 4s infinite alternate;animation-delay:.7s}.beam:nth-child(4){left:70%;transform:rotateY(-10deg) rotateX(-30deg);animation:beam-flicker 3.5s infinite alternate;animation-delay:2s}@keyframes beam-flicker{0%,100%{opacity:.3}50%{opacity:.7}}
+        
+        /* --- Integrated Info Box CSS (Purple/Pink Theme) --- */
+        :root {
+            --primary-color: #c000ff;
+            --secondary-color: #ff00de;
+            --bg-color: rgba(0, 0, 0, 0.7);
+            --text-color: #f0c6ff;
+        }
+        .info-box-container { position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; z-index: 10; }
+        .info-field-container { position: relative; width: 100%; }
+        .holo-info-box { width: 100%; min-height: 250px; background: var(--bg-color); border: none; outline: none; padding: 20px; color: var(--text-color); font-family: 'Fira Code', monospace; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border-radius: 4px; box-shadow: 0 0 15px rgba(192, 0, 255, 0.3), inset 0 0 10px rgba(0, 0, 0, 0.8); text-shadow: 0 0 5px rgba(255, 0, 222, 0.5); z-index: 1; }
+        .info-border { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; border: 1px solid rgba(192, 0, 255, 0.4); border-radius: 4px; z-index: 2; }
+        .info-border::before, .info-border::after { content: ""; position: absolute; width: 20px; height: 20px; border: 1px solid rgba(192, 0, 255, 0.7); z-index: 2; transition: all 0.3s ease; }
+        .info-border::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+        .info-border::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+        .holo-scan-line { position: absolute; width: 100%; height: 2px; background: linear-gradient(90deg, transparent 0%, var(--secondary-color) 20%, #fff 50%, var(--primary-color) 80%, transparent 100%); top: 0; left: 0; opacity: 1; filter: blur(1px); z-index: 3; pointer-events: none; animation: scan-animation 4s infinite ease-in-out; }
+        .info-glow { position: absolute; width: 100%; height: 100%; top: 0; left: 0; background: radial-gradient(ellipse at center, rgba(192, 0, 255, 0.1) 0%, transparent 70%); opacity: 1; border-radius: 4px; z-index: 0; pointer-events: none; }
+        .info-label { position: absolute; top: -30px; left: 0; color: rgba(192, 0, 255, 0.7); font-size: 14px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; pointer-events: none; text-shadow: 0 0 5px rgba(255, 0, 222, 0.5); }
+        .info-particles { position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; z-index: 3; overflow: hidden; border-radius: 4px; }
+        .info-particle { position: absolute; width: 4px; height: 4px; background: var(--secondary-color); border-radius: 50%; opacity: 1; filter: blur(1px); box-shadow: 0 0 5px var(--secondary-color); animation: particle-float 5s infinite ease-in-out; animation-delay: calc(var(--index) * 0.5s); }
+        .info-holo-overlay { position: absolute; width: 100%; height: 100%; top: 0; left: 0; background-image: linear-gradient(90deg, rgba(192, 0, 255, 0.05) 25%, rgba(255, 0, 222, 0.02) 50%, rgba(192, 0, 255, 0.05) 75%); background-size: 8px 100%; opacity: 0.5; pointer-events: none; z-index: 4; mix-blend-mode: overlay; }
+        .info-status { position: absolute; bottom: -25px; right: 0; font-size: 12px; color: rgba(192, 0, 255, 0.7); letter-spacing: 1px; pointer-events: none; text-transform: uppercase; }
+        .power-indicator { position: absolute; width: 100%; height: 2px; background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%); bottom: 0; left: 0; transform-origin: left; z-index: 3; }
+        @keyframes scan-animation { 0% { top: 0; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+        @keyframes particle-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+        /* --- NEW Astro Card CSS --- */
+        .astro-card { position: relative; width: 19em; height: 25em; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #171717; color: white; font-family: Montserrat, sans-serif; font-weight: bold; padding: 1em; border-radius: 20px; overflow: hidden; z-index: 1; }
+        .astro-card img { width: 12em; animation: move 10s ease-in-out infinite; z-index: 5; }
+        .astro-card .image:hover { cursor: -webkit-grab; cursor: grab; }
+        .astro-card::before { content: ""; position: absolute; width: 100%; height: 100%; inset: -3px; border-radius: 10px; background: radial-gradient(#858585, transparent, transparent); transform: translate(-5px, 250px); transition: 0.4s ease-in-out; z-index: -1; }
+        .astro-card:hover::before { width: 150%; height: 100%; margin-left: -4.25em; }
+        .astro-card::after { content: ""; position: absolute; inset: 2px; border-radius: 20px; background: rgb(23, 23, 23, 0.7); z-index: -1; }
+        .astro-card .heading { z-index: 2; transition: 0.4s ease-in-out; }
+        .astro-card:hover .heading { letter-spacing: 0.025em; }
+        .astro-card .heading::before { content: ""; position: absolute; top: 0; left: 0; width: 2px; height: 2px; border-radius: 50%; opacity: 1; box-shadow: 220px 118px #fff, 280px 176px #fff, 40px 50px #fff, 60px 180px #fff, 120px 130px #fff, 180px 176px #fff, 220px 290px #fff, 520px 250px #fff, 400px 220px #fff, 50px 350px #fff, 10px 230px #fff; z-index: -1; transition: 1s ease; animation: 1s glowing-stars linear alternate infinite; animation-delay: 0s; }
+        .astro-card:hover .heading::before { filter: blur(3px); }
+        .astro-card .heading::after { content: ""; top: -8.5%; left: -8.5%; position: absolute; width: 7.5em; height: 7.5em; border: none; outline: none; border-radius: 50%; background: #f9f9fb; box-shadow: 0px 0px 100px rgba(193, 119, 241, 0.8), 0px 0px 100px rgba(135, 42, 211, 0.8), inset #9b40fc 0px 0px 40px -12px; transition: 0.4s ease-in-out; z-index: -1; }
+        .astro-card:hover .heading::after { box-shadow: 0px 0px 200px rgba(193, 119, 241, 1), 0px 0px 200px rgba(135, 42, 211, 1), inset #9b40fc 0px 0px 40px -12px; }
+        @keyframes move { 0% { transform: translateX(0em) translateY(0em); } 25% { transform: translateY(-1em) translateX(-1em); rotate: -10deg; } 50% { transform: translateY(1em) translateX(-1em); } 75% { transform: translateY(-1.25em) translateX(1em); rotate: 10deg; } 100% { transform: translateX(0em) translateY(0em); } }
+        @keyframes glowing-stars { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; } }
+
+    </style>
+</head>
+<body>
+    <!-- Integrated Matrix Rain Background HTML -->
+    <div class="matrix-container">
+        <div class="matrix-pattern">
+            <div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div><div class="matrix-column"></div>
+        </div>
+    </div>
+
+    <div class="main-content-wrapper">
+        <div class="container max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+            <header class="text-center mb-8">
+                <!-- Integrated Neon Globe HTML -->
+                <div id="globe-visual-container">
+                     <div class="loader-container">
+                        <div class="hologram-platform"></div>
+                        <div class="platform-rings"><div class="platform-ring"></div><div class="platform-ring"></div><div class="platform-ring"></div></div>
+                        <div class="projection-beams"><div class="beam"></div><div class="beam"></div><div class="beam"></div><div class="beam"></div></div>
+                        <div class="holo-container">
+                            <div class="holo-sphere">
+                                <div class="holo-ring"></div><div class="holo-ring"></div><div class="holo-ring"></div><div class="holo-ring"></div><div class="holo-ring"></div>
+                                <div class="holo-particles"><div class="holo-particle"></div><div class="holo-particle"></div><div class="holo-particle"></div><div class="holo-particle"></div><div class="holo-particle"></div><div class="holo-particle"></div><div class="holo-particle"></div><div class="holo-particle"></div><div class="holo-particle"></div><div class="holo-particle"></div><div class="holo-particle"></div><div class="holo-particle"></div></div>
+                            </div>
+                            <div class="glitch-effect"></div>
+                        </div>
+                        <div class="code-lines"><div class="code-line">01001001 01001110 01001001 01010100 01001001 01000001</div><div class="code-line">function initHolographicMatrix() { renderState(); }</div><div class="code-line">01010011 01011001 01010011 01010100 01000101 01001101</div><div class="code-line">class QuantumProcessor { constructor() {} }</div><div class="code-line">01010010 01000101 01001110 01000101 01010010</div><div class="code-line">const matrix = [1.2, 0.8, 3.1, 2.7];</div><div class="code-line">01010000 01010010 01001111 01000011 01000101 01010011</div><div class="code-line">async function loadData() { await fetch('/api'); }</div></div>
+                        <div class="loading-text">SYSTEM ONLINE</div>
+                        <div class="progress-container"><div class="progress-bar"></div></div>
+                    </div>
+                </div>
+                <h1 class="text-3xl sm:text-4xl font-bold text-green-400">Advanced IMEI Intelligence Tool</h1>
+                <p class="text-gray-400 mt-2">Real-time device information retrieval.</p>
+            </header>
+
+            <main>
+                <!-- Original IMEI input component -->
+                <div class="relative w-full max-w-md mx-auto font-mono">
+                  <div class="relative p-6 bg-black/70 backdrop-blur-sm border-2 border-green-400 rounded-lg shadow-lg overflow-hidden">
+                    <div class="absolute top-0 left-0 w-6 h-1 bg-green-400"></div><div class="absolute top-0 left-0 w-1 h-6 bg-green-400"></div><div class="absolute top-0 right-0 w-6 h-1 bg-green-400"></div><div class="absolute top-0 right-0 w-1 h-6 bg-green-400"></div><div class="absolute bottom-0 left-0 w-6 h-1 bg-green-400"></div><div class="absolute bottom-0 left-0 w-1 h-6 bg-green-400"></div><div class="absolute bottom-0 right-0 w-6 h-1 bg-green-400"></div><div class="absolute bottom-0 right-0 w-1 h-6 bg-green-400"></div>
+                    <div class="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-transparent via-green-900/20 to-transparent"></div>
+                    <label class="mb-3 text-green-400 text-sm tracking-wider flex items-center" for="imeiInput"><span class="mr-2 text-green-600">➜</span><span class="text-green-300 font-bold"></span><span class="ml-2 opacity-75 animate-pulse">IMEI Check ▋</span></label>
+                    <div class="relative">
+                      <input class="w-full bg-transparent text-green-300 text-base border-2 border-green-500 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-600 placeholder-green-600/60 pr-10" placeholder="➤ Enter 15-digit IMEI #" id="imeiInput" type="text" maxlength="15" autocomplete="off"/>
+                      <svg stroke="currentColor" viewBox="0 0 24 24" fill="none" class="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-500" xmlns="http://www.w3.org/2000/svg"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path></svg>
+                    </div>
+                    <div class="mt-4 flex flex-col gap-2"><p class="text-xs text-green-500 opacity-80 flex items-center gap-2"><span class="w-2 h-2 bg-red-500 rounded-full"></span><span><span class="text-red-400">WARNING:</span> Unauthorized access will be reported</span></p></div>
+                    <div class="absolute top-0 right-12 w-px h-4 bg-green-500/50"></div><div class="absolute top-0 right-16 w-px h-6 bg-green-500/30"></div><div class="absolute top-0 right-20 w-px h-2 bg-green-500/70"></div><div class="absolute bottom-0 left-12 w-px h-4 bg-green-500/50"></div><div class="absolute bottom-0 left-16 w-px h-6 bg-green-500/30"></div><div class="absolute bottom-0 left-20 w-px h-2 bg-green-500/70"></div>
+                  </div>
+                </div>
+                
+                <div class="text-center mt-6">
+                    <button id="submitBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-400">Initiate Lookup</button>
+                </div>
+
+                <!-- Tabs now sit above the new info box -->
+                <div class="mt-12 border-b border-gray-700">
+                    <nav class="flex space-x-4" aria-label="Tabs">
+                        <button id="tab-results" class="tab-button active py-4 px-1 font-medium text-lg">Results</button>
+                        <button id="tab-history" class="tab-button py-4 px-1 font-medium text-lg">History</button>
+                    </nav>
+                </div>
+                
+                <!-- Integrated Info Box HTML -->
+                <div id="content-area" class="mt-2 info-box-container">
+                    <div class="info-field-container">
+                        <div class="info-label">● DATA STREAM</div>
+                        <div class="info-border"></div>
+                        <div class="holo-scan-line"></div>
+                        <div class="info-glow"></div>
+                        <div class="power-indicator"></div>
+                        <div class="info-status">SYSTEM STATUS: STANDBY</div>
+                        <div class="info-particles">
+                            <div class="info-particle" style="--index: 1; top: 20%; left: 10%;"></div><div class="info-particle" style="--index: 2; top: 65%; left: 25%;"></div><div class="info-particle" style="--index: 3; top: 40%; left: 80%;"></div><div class="info-particle" style="--index: 4; top: 75%; left: 60%;"></div><div class="info-particle" style="--index: 5; top: 30%; left: 45%;"></div><div class="info-particle" style="--index: 6; top: 80%; left: 90%;"></div>
+                        </div>
+                        <div class="info-holo-overlay"></div>
+
+                        <!-- Original Content Area (now inside the holo box) -->
+                        <div class="holo-info-box">
+                            <div id="results-content">
+                                <div id="result-container" class="min-h-[200px] flex items-center justify-center">
+                                    <p class="text-gray-400 text-center">Awaiting IMEI submission...</p>
+                                </div>
+                            </div>
+                            <div id="history-content" class="hidden">
+                                <div id="history-container" class="min-h-[200px]">
+                                    <!-- History items will be injected here -->
+                                </div>
+                                <div class="text-right mt-4">
+                                    <button id="clearHistoryBtn" class="text-red-500 hover:text-red-400 text-sm">Clear History</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NEW Astro Card HTML -->
+                <div class="mt-16 flex justify-center">
+                    <div class="astro-card">
+                        <div class="heading"></div>
+                        <img src="data:image/jpeg;base64,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" alt="Minion Astronauts" class="image"/>
+                        <div class="heading"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // --- ALL ORIGINAL JAVASCRIPT LOGIC (UNTOUCHED) ---
+        const API_KEY = 'YOUR_API_KEY'; 
+        const API_ENDPOINT = 'https://imei.info/api/v1/imei-check';
+        const imeiInput = document.getElementById('imeiInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const resultContainer = document.getElementById('result-container');
+        const historyContainer = document.getElementById('history-container');
+        const tabResults = document.getElementById('tab-results');
+        const tabHistory = document.getElementById('tab-history');
+        const resultsContent = document.getElementById('results-content');
+        const historyContent = document.getElementById('history-content');
+        const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+        const infoStatus = document.querySelector('.info-status');
+
+        submitBtn.addEventListener('click', handleIMSubmit);
+        imeiInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleIMSubmit(); });
+        tabResults.addEventListener('click', () => switchTab('results'));
+        tabHistory.addEventListener('click', () => { switchTab('history'); loadSearchHistory(); });
+        clearHistoryBtn.addEventListener('click', clearSearchHistory);
+
+        function switchTab(tabName) {
+            if (tabName === 'results') {
+                resultsContent.classList.remove('hidden');
+                historyContent.classList.add('hidden');
+                tabResults.classList.add('active');
+                tabHistory.classList.remove('active');
+            } else {
+                resultsContent.classList.add('hidden');
+                historyContent.classList.remove('hidden');
+                tabResults.classList.remove('active');
+                tabHistory.classList.add('active');
+            }
+        }
+        
+        async function handleIMSubmit() {
+            const imei = imeiInput.value.trim();
+            if (!validateIMEI(imei)) {
+                displayError("Please enter a valid 15-digit IMEI number.");
+                infoStatus.textContent = "SYSTEM STATUS: VALIDATION FAILED";
+                return;
+            }
+            if (API_KEY === 'YOUR_API_KEY') {
+                displayError("API Key is not configured. Please edit the script and add your API key.");
+                infoStatus.textContent = "SYSTEM STATUS: CONFIGURATION ERROR";
+                return;
+            }
+            displayLoading();
+            switchTab('results');
+            try {
+                const url = `${API_ENDPOINT}?imei=${imei}&token=${API_KEY}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                if (!response.ok || data.errors) {
+                    throw new Error(data.errors ? data.errors[0].message : 'Failed to fetch data.');
+                }
+                displayIMEIInfo(data);
+                saveSearchHistory(imei, data);
+            } catch (error) {
+                console.error("API Error:", error);
+                displayError(error.message || "Failed to retrieve IMEI information. Service might be unavailable.");
+            }
+        }
+        function validateIMEI(imei) { return /^\d{15}$/.test(imei); }
+        function displayLoading() {
+            infoStatus.textContent = "SYSTEM STATUS: QUERYING...";
+            resultContainer.innerHTML = `<div class="flex flex-col items-center justify-center text-center text-pink-400"><svg class="animate-spin h-8 w-8 text-purple-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><p class="font-semibold">Querying Central Database...</p><p class="text-sm opacity-75">This may take a moment.</p></div>`;
+        }
+        function displayError(message) {
+            infoStatus.textContent = "SYSTEM STATUS: ERROR";
+            resultContainer.innerHTML = `<div class="text-center text-red-400 fade-in"><h3 class="font-bold text-lg mb-2">Error</h3><p>${message}</p></div>`;
+        }
+        function displayIMEIInfo(data) {
+            infoStatus.textContent = "SYSTEM STATUS: DATA RECEIVED";
+            let content = `<div class="w-full text-left fade-in"><h2 class="text-2xl font-bold text-pink-400 mb-4 border-b-2 border-purple-500 pb-2">${data.device_name || 'Device Information'}</h2><table class="w-full result-table"><tbody>`;
+            const createRows = (obj, prefix = '') => {
+                let rows = '';
+                for (const key in obj) {
+                    if (obj.hasOwnProperty(key)) {
+                        const value = obj[key];
+                        const formattedKey = prefix + key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                            rows += createRows(value, `${formattedKey} - `);
+                        } else {
+                            rows += `<tr><td>${formattedKey}</td><td>${value || 'N/A'}</td></tr>`;
+                        }
+                    }
+                }
+                return rows;
+            };
+            content += createRows(data);
+            content += `</tbody></table></div>`;
+            resultContainer.innerHTML = content;
+        }
+        function saveSearchHistory(imei, info) {
+            const history = JSON.parse(localStorage.getItem('imeiSearchHistory')) || [];
+            const existingIndex = history.findIndex(entry => entry.imei === imei);
+            if (existingIndex > -1) { history.splice(existingIndex, 1); }
+            history.unshift({ imei, info, date: new Date().toISOString() });
+            if (history.length > 20) { history.pop(); }
+            localStorage.setItem('imeiSearchHistory', JSON.stringify(history));
+        }
+        function loadSearchHistory() {
+            infoStatus.textContent = "SYSTEM STATUS: VIEWING HISTORY";
+            const history = JSON.parse(localStorage.getItem('imeiSearchHistory')) || [];
+            if (history.length === 0) {
+                historyContainer.innerHTML = '<p class="text-gray-400 text-center">No search history found.</p>';
+                return;
+            }
+            let historyHTML = '<div class="space-y-4">';
+            history.forEach(entry => {
+                const deviceName = entry.info.device_name || 'Unknown Device';
+                const date = new Date(entry.date).toLocaleString();
+                historyHTML += `<div class="bg-gray-800/80 p-4 rounded-lg border border-gray-700"><p class="font-bold text-pink-400">${deviceName}</p><p class="text-sm text-gray-300">IMEI: ${entry.imei}</p><p class="text-xs text-gray-500">${date}</p></div>`;
+            });
+            historyHTML += '</div>';
+            historyContainer.innerHTML = historyHTML;
+        }
+        function clearSearchHistory() {
+            localStorage.removeItem('imeiSearchHistory');
+            loadSearchHistory();
+        }
+        loadSearchHistory();
+    </script>
+</body>
+</html>
