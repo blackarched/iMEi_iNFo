@@ -135,8 +135,18 @@
                   </div>
                 </div>
                 
-                <div class="text-center mt-6">
+                <div class="text-center mt-6 space-y-4">
                     <button id="submitBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-400">Initiate Lookup</button>
+                    
+                    <!-- Batch Processing Section -->
+                    <div class="mt-6 p-4 bg-gray-800/50 rounded-lg border border-blue-500/30">
+                        <h3 class="text-lg font-bold text-blue-400 mb-3">📋 Batch Processing</h3>
+                        <textarea id="batchInput" class="w-full bg-transparent text-green-300 text-sm border-2 border-blue-500 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-600 placeholder-blue-600/60 h-24 resize-none" placeholder="Enter multiple IMEIs (one per line or comma-separated)&#10;Example:&#10;123456789012345&#10;987654321098765"></textarea>
+                        <div class="mt-3 flex justify-between items-center">
+                            <button id="batchSubmitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition duration-300">Process Batch</button>
+                            <span id="batchCounter" class="text-sm text-gray-400">0 IMEIs ready</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Tabs now sit above the new info box -->
@@ -172,7 +182,12 @@
                                 <div id="history-container" class="min-h-[200px]">
                                     <!-- History items will be injected here -->
                                 </div>
-                                <div class="text-right mt-4">
+                                <div class="flex justify-between items-center mt-4">
+                                    <div class="space-x-2">
+                                        <button id="exportHistoryBtn" class="text-blue-500 hover:text-blue-400 text-sm">📥 Export</button>
+                                        <button id="importHistoryBtn" class="text-green-500 hover:text-green-400 text-sm">📤 Import</button>
+                                        <input type="file" id="importHistoryFile" accept=".json" style="display: none;">
+                                    </div>
                                     <button id="clearHistoryBtn" class="text-red-500 hover:text-red-400 text-sm">Clear History</button>
                                 </div>
                             </div>
@@ -193,9 +208,54 @@
     </div>
 
     <script>
-        // --- ALL ORIGINAL JAVASCRIPT LOGIC (UNTOUCHED) ---
+        // --- ENHANCED API CONFIGURATION ---
+        const API_CONFIGS = [
+            {
+                name: 'IMEI.info',
+                endpoint: 'https://imei.info/api/v1/imei-check',
+                key: 'YOUR_API_KEY',
+                format: (imei, key) => `${endpoint}?imei=${imei}&token=${key}`
+            },
+            {
+                name: 'IMEIpro',
+                endpoint: 'https://imeipro.info/api',
+                key: 'YOUR_IMEIPRO_KEY',
+                format: (imei, key) => `${endpoint}/check?imei=${imei}&key=${key}`
+            },
+            {
+                name: 'DeviceAtlas',
+                endpoint: 'https://deviceatlas.com/api/imei',
+                key: 'YOUR_DEVICEATLAS_KEY',
+                format: (imei, key) => `${endpoint}/${imei}?key=${key}`
+            }
+        ];
+        
+        // Fallback to primary config for backward compatibility
         const API_KEY = 'YOUR_API_KEY'; 
         const API_ENDPOINT = 'https://imei.info/api/v1/imei-check';
+        
+        // Security and Rate Limiting
+        const RATE_LIMIT = {
+            maxRequests: 10,
+            timeWindow: 60000, // 1 minute
+            requests: [],
+            
+            canMakeRequest() {
+                const now = Date.now();
+                this.requests = this.requests.filter(time => now - time < this.timeWindow);
+                return this.requests.length < this.maxRequests;
+            },
+            
+            addRequest() {
+                this.requests.push(Date.now());
+            },
+            
+            getWaitTime() {
+                if (this.requests.length === 0) return 0;
+                const oldestRequest = Math.min(...this.requests);
+                return Math.max(0, this.timeWindow - (Date.now() - oldestRequest));
+            }
+        };
         const imeiInput = document.getElementById('imeiInput');
         const submitBtn = document.getElementById('submitBtn');
         const resultContainer = document.getElementById('result-container');
@@ -206,12 +266,23 @@
         const historyContent = document.getElementById('history-content');
         const clearHistoryBtn = document.getElementById('clearHistoryBtn');
         const infoStatus = document.querySelector('.info-status');
+        const batchInput = document.getElementById('batchInput');
+        const batchSubmitBtn = document.getElementById('batchSubmitBtn');
+        const batchCounter = document.getElementById('batchCounter');
+        const exportHistoryBtn = document.getElementById('exportHistoryBtn');
+        const importHistoryBtn = document.getElementById('importHistoryBtn');
+        const importHistoryFile = document.getElementById('importHistoryFile');
 
         submitBtn.addEventListener('click', handleIMSubmit);
         imeiInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleIMSubmit(); });
         tabResults.addEventListener('click', () => switchTab('results'));
         tabHistory.addEventListener('click', () => { switchTab('history'); loadSearchHistory(); });
         clearHistoryBtn.addEventListener('click', clearSearchHistory);
+        batchSubmitBtn.addEventListener('click', handleBatchSubmit);
+        batchInput.addEventListener('input', updateBatchCounter);
+        exportHistoryBtn.addEventListener('click', exportSearchHistory);
+        importHistoryBtn.addEventListener('click', () => importHistoryFile.click());
+        importHistoryFile.addEventListener('change', importSearchHistory);
 
         function switchTab(tabName) {
             if (tabName === 'results') {
@@ -228,12 +299,39 @@
         }
         
         async function handleIMSubmit() {
-            const imei = imeiInput.value.trim();
-            if (!validateIMEI(imei)) {
-                displayError("Please enter a valid 15-digit IMEI number.");
+            let imei = imeiInput.value.trim();
+            
+            // Input sanitization
+            imei = sanitizeInput(imei);
+            
+            // Rate limiting check
+            if (!RATE_LIMIT.canMakeRequest()) {
+                const waitTime = Math.ceil(RATE_LIMIT.getWaitTime() / 1000);
+                displayError(`Rate limit exceeded. Please wait ${waitTime} seconds before making another request.`);
+                infoStatus.textContent = "SYSTEM STATUS: RATE LIMITED";
+                return;
+            }
+            
+            // Format validation and cleanup
+            imei = validateIMEIFormat(imei);
+            if (!imei) {
+                displayError("Invalid IMEI format. Please enter a valid 15-digit IMEI number.");
                 infoStatus.textContent = "SYSTEM STATUS: VALIDATION FAILED";
                 return;
             }
+            
+            // Luhn algorithm validation
+            if (!validateIMEI(imei)) {
+                displayError("Invalid IMEI checksum. Please verify the IMEI number.");
+                infoStatus.textContent = "SYSTEM STATUS: CHECKSUM FAILED";
+                return;
+            }
+            
+            // Update input field with cleaned IMEI
+            imeiInput.value = imei;
+            
+            // Add to rate limit counter
+            RATE_LIMIT.addRequest();
             if (API_KEY === 'YOUR_API_KEY') {
                 displayError("API Key is not configured. Please edit the script and add your API key.");
                 infoStatus.textContent = "SYSTEM STATUS: CONFIGURATION ERROR";
@@ -241,21 +339,218 @@
             }
             displayLoading();
             switchTab('results');
+            
             try {
-                const url = `${API_ENDPOINT}?imei=${imei}&token=${API_KEY}`;
-                const response = await fetch(url);
-                const data = await response.json();
-                if (!response.ok || data.errors) {
-                    throw new Error(data.errors ? data.errors[0].message : 'Failed to fetch data.');
-                }
+                const data = await fetchIMEIDataWithFallbacks(imei);
                 displayIMEIInfo(data);
                 saveSearchHistory(imei, data);
             } catch (error) {
                 console.error("API Error:", error);
-                displayError(error.message || "Failed to retrieve IMEI information. Service might be unavailable.");
+                
+                // Show offline information even if API fails
+                const tacInfo = getTACInfo(imei);
+                const offlineData = {
+                    device_name: `${tacInfo.brand} ${tacInfo.model}`,
+                    brand: tacInfo.brand,
+                    model: tacInfo.model,
+                    type: tacInfo.type,
+                    tac: imei.substring(0, 8),
+                    fac: imei.substring(8, 10),
+                    snr: imei.substring(10, 14),
+                    check_digit: imei.substring(14, 15),
+                    api_status: 'Offline Mode - Limited Information Available'
+                };
+                
+                displayIMEIInfo(offlineData);
+                saveSearchHistory(imei, offlineData);
+                
+                infoStatus.textContent = "SYSTEM STATUS: OFFLINE MODE";
             }
         }
-        function validateIMEI(imei) { return /^\d{15}$/.test(imei); }
+        
+        async function fetchIMEIDataWithFallbacks(imei) {
+            const errors = [];
+            
+            // Try each API configuration
+            for (const config of API_CONFIGS) {
+                if (config.key === 'YOUR_API_KEY' || config.key === 'YOUR_IMEIPRO_KEY' || config.key === 'YOUR_DEVICEATLAS_KEY') {
+                    continue; // Skip unconfigured APIs
+                }
+                
+                try {
+                    infoStatus.textContent = `SYSTEM STATUS: QUERYING ${config.name.toUpperCase()}...`;
+                    const url = config.format(imei, config.key);
+                    const response = await fetch(url, {
+                        timeout: 10000,
+                        headers: {
+                            'User-Agent': 'IMEI-Tool/1.0',
+                            'Accept': 'application/json'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.errors && data.errors.length > 0) {
+                        throw new Error(data.errors[0].message || 'API returned errors');
+                    }
+                    
+                    // Add source information
+                    data.api_source = config.name;
+                    data.query_timestamp = new Date().toISOString();
+                    
+                    return data;
+                    
+                } catch (error) {
+                    console.warn(`${config.name} API failed:`, error);
+                    errors.push(`${config.name}: ${error.message}`);
+                }
+            }
+            
+            // If all APIs fail, try the fallback endpoint
+            try {
+                infoStatus.textContent = "SYSTEM STATUS: TRYING FALLBACK API...";
+                const url = `${API_ENDPOINT}?imei=${imei}&token=${API_KEY}`;
+                const response = await fetch(url, { timeout: 15000 });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.errors && data.errors.length > 0) {
+                    throw new Error(data.errors[0].message || 'API returned errors');
+                }
+                
+                data.api_source = 'Fallback API';
+                data.query_timestamp = new Date().toISOString();
+                
+                return data;
+                
+            } catch (error) {
+                errors.push(`Fallback API: ${error.message}`);
+            }
+            
+            // If all APIs fail, throw combined error
+            throw new Error(`All API sources failed:\n${errors.join('\n')}`);
+        }
+        
+        async function testAPIConnectivity() {
+            const results = [];
+            
+            for (const config of API_CONFIGS) {
+                if (config.key.startsWith('YOUR_')) continue;
+                
+                try {
+                    const response = await fetch(config.endpoint, { 
+                        method: 'HEAD', 
+                        timeout: 5000 
+                    });
+                    results.push({
+                        name: config.name,
+                        status: response.ok ? 'Online' : 'Error',
+                        responseTime: Date.now()
+                    });
+                } catch (error) {
+                    results.push({
+                        name: config.name,
+                        status: 'Offline',
+                        error: error.message
+                    });
+                }
+            }
+            
+            return results;
+        }
+        function validateIMEI(imei) { 
+            // Basic format check
+            if (!/^\d{15}$/.test(imei)) return false;
+            
+            // Luhn algorithm validation
+            let sum = 0;
+            let alternate = false;
+            
+            for (let i = imei.length - 1; i >= 0; i--) {
+                let n = parseInt(imei.charAt(i), 10);
+                
+                if (alternate) {
+                    n *= 2;
+                    if (n > 9) n = (n % 10) + 1;
+                }
+                
+                sum += n;
+                alternate = !alternate;
+            }
+            
+            return (sum % 10) === 0;
+        }
+        
+        function validateIMEIFormat(imei) {
+            // Remove spaces and hyphens
+            imei = imei.replace(/[\s-]/g, '');
+            
+            // Check for common invalid patterns
+            if (imei === '000000000000000' || imei === '111111111111111') return false;
+            if (imei.match(/^(\d)\1{14}$/)) return false; // All same digits
+            
+            return imei;
+        }
+        
+        function getTACInfo(imei) {
+            const tac = imei.substring(0, 8);
+            const tacDatabase = {
+                '35209900': { brand: 'Apple', model: 'iPhone', type: 'Smartphone' },
+                '35216406': { brand: 'Samsung', model: 'Galaxy', type: 'Smartphone' },
+                '35328504': { brand: 'Nokia', model: 'Nokia Phone', type: 'Feature Phone' },
+                '35875505': { brand: 'Huawei', model: 'Mate/P Series', type: 'Smartphone' },
+                '35699302': { brand: 'Xiaomi', model: 'Mi/Redmi', type: 'Smartphone' },
+                '35841605': { brand: 'OnePlus', model: 'OnePlus', type: 'Smartphone' },
+                '35404907': { brand: 'Google', model: 'Pixel', type: 'Smartphone' },
+                '35161102': { brand: 'LG', model: 'LG Phone', type: 'Smartphone' },
+                '35434505': { brand: 'Sony', model: 'Xperia', type: 'Smartphone' },
+                '35291508': { brand: 'Motorola', model: 'Moto', type: 'Smartphone' }
+            };
+            
+            return tacDatabase[tac] || { brand: 'Unknown', model: 'Unknown', type: 'Unknown' };
+        }
+        
+        function sanitizeInput(input) {
+            if (typeof input !== 'string') return '';
+            
+            // Remove potentially dangerous characters and limit length
+            return input
+                .replace(/[<>\"'&]/g, '') // Remove HTML/script injection chars
+                .replace(/[^\d\s-]/g, '')  // Only allow digits, spaces, and hyphens for IMEI
+                .substring(0, 20)          // Limit length
+                .trim();
+        }
+        
+        function logSecurityEvent(event, details) {
+            const timestamp = new Date().toISOString();
+            const logEntry = {
+                timestamp,
+                event,
+                details,
+                userAgent: navigator.userAgent,
+                ip: 'client-side' // Would need server-side for real IP
+            };
+            
+            // Store in local storage for debugging (in production, send to server)
+            const logs = JSON.parse(localStorage.getItem('securityLogs') || '[]');
+            logs.push(logEntry);
+            
+            // Keep only last 100 entries
+            if (logs.length > 100) {
+                logs.splice(0, logs.length - 100);
+            }
+            
+            localStorage.setItem('securityLogs', JSON.stringify(logs));
+            console.warn('Security Event:', logEntry);
+        }
         function displayLoading() {
             infoStatus.textContent = "SYSTEM STATUS: QUERYING...";
             resultContainer.innerHTML = `<div class="flex flex-col items-center justify-center text-center text-pink-400"><svg class="animate-spin h-8 w-8 text-purple-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><p class="font-semibold">Querying Central Database...</p><p class="text-sm opacity-75">This may take a moment.</p></div>`;
@@ -266,7 +561,43 @@
         }
         function displayIMEIInfo(data) {
             infoStatus.textContent = "SYSTEM STATUS: DATA RECEIVED";
-            let content = `<div class="w-full text-left fade-in"><h2 class="text-2xl font-bold text-pink-400 mb-4 border-b-2 border-purple-500 pb-2">${data.device_name || 'Device Information'}</h2><table class="w-full result-table"><tbody>`;
+            const imei = imeiInput.value.trim();
+            const tacInfo = getTACInfo(imei);
+            
+            let content = `<div class="w-full text-left fade-in">
+                <h2 class="text-2xl font-bold text-pink-400 mb-4 border-b-2 border-purple-500 pb-2">IMEI Analysis Report</h2>
+                
+                <!-- IMEI Breakdown Section -->
+                <div class="mb-6 p-4 bg-gray-800/50 rounded-lg border border-purple-500/30">
+                    <h3 class="text-lg font-bold text-green-400 mb-3">📱 IMEI Breakdown</h3>
+                    <table class="w-full result-table">
+                        <tbody>
+                            <tr><td>Full IMEI</td><td class="font-mono text-green-300">${imei}</td></tr>
+                            <tr><td>TAC (Type Allocation Code)</td><td class="font-mono text-blue-300">${imei.substring(0, 8)}</td></tr>
+                            <tr><td>FAC (Final Assembly Code)</td><td class="font-mono text-yellow-300">${imei.substring(8, 10)}</td></tr>
+                            <tr><td>SNR (Serial Number)</td><td class="font-mono text-orange-300">${imei.substring(10, 14)}</td></tr>
+                            <tr><td>Check Digit</td><td class="font-mono text-red-300">${imei.substring(14, 15)}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- TAC Database Section -->
+                <div class="mb-6 p-4 bg-gray-800/50 rounded-lg border border-blue-500/30">
+                    <h3 class="text-lg font-bold text-blue-400 mb-3">🏭 Device Information (TAC Database)</h3>
+                    <table class="w-full result-table">
+                        <tbody>
+                            <tr><td>Brand</td><td>${tacInfo.brand}</td></tr>
+                            <tr><td>Model</td><td>${tacInfo.model}</td></tr>
+                            <tr><td>Device Type</td><td>${tacInfo.type}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Online Database Section -->
+                <div class="p-4 bg-gray-800/50 rounded-lg border border-pink-500/30">
+                    <h3 class="text-lg font-bold text-pink-400 mb-3">🌐 Online Database Information</h3>
+                    <table class="w-full result-table"><tbody>`;
+            
             const createRows = (obj, prefix = '') => {
                 let rows = '';
                 for (const key in obj) {
@@ -276,15 +607,39 @@
                         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                             rows += createRows(value, `${formattedKey} - `);
                         } else {
-                            rows += `<tr><td>${formattedKey}</td><td>${value || 'N/A'}</td></tr>`;
+                            const statusIcon = getStatusIcon(key, value);
+                            rows += `<tr><td>${formattedKey}</td><td>${statusIcon} ${value || 'N/A'}</td></tr>`;
                         }
                     }
                 }
                 return rows;
             };
+            
             content += createRows(data);
-            content += `</tbody></table></div>`;
+            content += `</tbody></table></div></div>`;
             resultContainer.innerHTML = content;
+        }
+        
+        function getStatusIcon(key, value) {
+            if (!value || value === 'N/A') return '❓';
+            
+            const lowerKey = key.toLowerCase();
+            const lowerValue = value.toString().toLowerCase();
+            
+            if (lowerKey.includes('stolen') || lowerKey.includes('lost')) {
+                return lowerValue.includes('clean') || lowerValue.includes('no') ? '✅' : '⚠️';
+            }
+            if (lowerKey.includes('unlock')) {
+                return lowerValue.includes('unlock') ? '🔓' : '🔒';
+            }
+            if (lowerKey.includes('network')) {
+                return lowerValue.includes('clean') ? '📶' : '❌';
+            }
+            if (lowerKey.includes('warranty')) {
+                return lowerValue.includes('valid') || lowerValue.includes('active') ? '✅' : '❌';
+            }
+            
+            return '📋';
         }
         function saveSearchHistory(imei, info) {
             const history = JSON.parse(localStorage.getItem('imeiSearchHistory')) || [];
@@ -314,6 +669,314 @@
             localStorage.removeItem('imeiSearchHistory');
             loadSearchHistory();
         }
+        
+        function exportSearchHistory() {
+            const history = JSON.parse(localStorage.getItem('imeiSearchHistory')) || [];
+            if (history.length === 0) {
+                alert('No search history to export.');
+                return;
+            }
+            
+            const exportData = {
+                version: '1.0',
+                exportDate: new Date().toISOString(),
+                count: history.length,
+                data: history
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `imei_search_history_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        function importSearchHistory(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importData = JSON.parse(e.target.result);
+                    
+                    // Validate import data structure
+                    if (!importData.data || !Array.isArray(importData.data)) {
+                        throw new Error('Invalid file format');
+                    }
+                    
+                    // Merge with existing history
+                    const existingHistory = JSON.parse(localStorage.getItem('imeiSearchHistory')) || [];
+                    const mergedHistory = [...existingHistory];
+                    
+                    let importedCount = 0;
+                    importData.data.forEach(entry => {
+                        // Check if IMEI already exists
+                        if (!mergedHistory.find(existing => existing.imei === entry.imei)) {
+                            mergedHistory.unshift(entry);
+                            importedCount++;
+                        }
+                    });
+                    
+                    // Limit total history
+                    if (mergedHistory.length > 50) {
+                        mergedHistory.splice(50);
+                    }
+                    
+                    localStorage.setItem('imeiSearchHistory', JSON.stringify(mergedHistory));
+                    loadSearchHistory();
+                    
+                    alert(`Successfully imported ${importedCount} new entries.`);
+                    
+                } catch (error) {
+                    alert('Error importing file: ' + error.message);
+                }
+                
+                // Reset file input
+                event.target.value = '';
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        function updateBatchCounter() {
+            const text = batchInput.value.trim();
+            if (!text) {
+                batchCounter.textContent = '0 IMEIs ready';
+                return;
+            }
+            
+            const imeis = parseBatchInput(text);
+            const validCount = imeis.filter(imei => validateIMEIFormat(imei) && validateIMEI(imei)).length;
+            const totalCount = imeis.length;
+            
+            batchCounter.textContent = `${validCount}/${totalCount} IMEIs valid`;
+            batchCounter.className = validCount === totalCount ? 'text-sm text-green-400' : 'text-sm text-yellow-400';
+        }
+        
+        function parseBatchInput(text) {
+            // Split by newlines and commas, then clean up
+            return text.split(/[\n,]+/)
+                      .map(imei => imei.trim())
+                      .filter(imei => imei.length > 0)
+                      .map(imei => validateIMEIFormat(imei))
+                      .filter(imei => imei !== false);
+        }
+        
+        async function handleBatchSubmit() {
+            const text = batchInput.value.trim();
+            if (!text) {
+                displayError('Please enter at least one IMEI for batch processing.');
+                return;
+            }
+            
+            const imeis = parseBatchInput(text);
+            if (imeis.length === 0) {
+                displayError('No valid IMEIs found in the input.');
+                return;
+            }
+            
+            // Validate all IMEIs first
+            const invalidIMEIs = imeis.filter(imei => !validateIMEI(imei));
+            if (invalidIMEIs.length > 0) {
+                displayError(`Invalid IMEIs found: ${invalidIMEIs.join(', ')}`);
+                return;
+            }
+            
+            if (imeis.length > 10) {
+                if (!confirm(`You are about to process ${imeis.length} IMEIs. This may take some time and consume API quota. Continue?`)) {
+                    return;
+                }
+            }
+            
+            await processBatchIMEIs(imeis);
+        }
+        
+        async function processBatchIMEIs(imeis) {
+            switchTab('results');
+            batchSubmitBtn.disabled = true;
+            batchSubmitBtn.textContent = 'Processing...';
+            
+            infoStatus.textContent = "SYSTEM STATUS: BATCH PROCESSING...";
+            
+            const results = [];
+            const errors = [];
+            let processed = 0;
+            
+            // Display initial progress
+            resultContainer.innerHTML = `
+                <div class="text-center text-pink-400">
+                    <h3 class="text-xl font-bold mb-4">📋 Batch Processing in Progress</h3>
+                    <div class="w-full bg-gray-700 rounded-full h-2 mb-4">
+                        <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <p id="progressText">Processing 0 of ${imeis.length} IMEIs...</p>
+                    <div id="currentIMEI" class="text-sm text-gray-400 mt-2"></div>
+                </div>
+            `;
+            
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const currentIMEIElement = document.getElementById('currentIMEI');
+            
+            // Process IMEIs with rate limiting
+            for (let i = 0; i < imeis.length; i++) {
+                const imei = imeis[i];
+                currentIMEIElement.textContent = `Current: ${imei}`;
+                
+                try {
+                    // Add delay to respect API rate limits
+                    if (i > 0) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                    
+                    const data = await fetchIMEIDataWithFallbacks(imei);
+                    results.push({ imei, data, status: 'success' });
+                    saveSearchHistory(imei, data);
+                    
+                } catch (error) {
+                    console.error(`Error processing IMEI ${imei}:`, error);
+                    
+                    // Try to get offline info as fallback
+                    const tacInfo = getTACInfo(imei);
+                    const offlineData = {
+                        device_name: `${tacInfo.brand} ${tacInfo.model}`,
+                        brand: tacInfo.brand,
+                        model: tacInfo.model,
+                        type: tacInfo.type,
+                        api_status: 'Offline Mode - Limited Information Available',
+                        error: error.message
+                    };
+                    
+                    results.push({ imei, data: offlineData, status: 'partial' });
+                    errors.push({ imei, error: error.message });
+                    saveSearchHistory(imei, offlineData);
+                }
+                
+                processed++;
+                const progress = (processed / imeis.length) * 100;
+                progressBar.style.width = `${progress}%`;
+                progressText.textContent = `Processing ${processed} of ${imeis.length} IMEIs...`;
+            }
+            
+            // Display batch results
+            displayBatchResults(results, errors);
+            
+            batchSubmitBtn.disabled = false;
+            batchSubmitBtn.textContent = 'Process Batch';
+            infoStatus.textContent = "SYSTEM STATUS: BATCH COMPLETE";
+        }
+        
+        function displayBatchResults(results, errors) {
+            let content = `
+                <div class="w-full text-left fade-in">
+                    <h2 class="text-2xl font-bold text-pink-400 mb-4 border-b-2 border-purple-500 pb-2">
+                        📋 Batch Processing Results
+                    </h2>
+                    
+                    <div class="mb-6 p-4 bg-gray-800/50 rounded-lg border border-green-500/30">
+                        <h3 class="text-lg font-bold text-green-400 mb-3">📊 Summary</h3>
+                        <div class="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                                <div class="text-2xl font-bold text-green-400">${results.filter(r => r.status === 'success').length}</div>
+                                <div class="text-sm text-gray-400">Successful</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-yellow-400">${results.filter(r => r.status === 'partial').length}</div>
+                                <div class="text-sm text-gray-400">Partial</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-gray-400">${results.length}</div>
+                                <div class="text-sm text-gray-400">Total</div>
+                            </div>
+                        </div>
+                    </div>
+            `;
+            
+            // Display individual results
+            results.forEach((result, index) => {
+                const statusColor = result.status === 'success' ? 'green' : 'yellow';
+                const tacInfo = getTACInfo(result.imei);
+                
+                content += `
+                    <div class="mb-4 p-4 bg-gray-800/30 rounded-lg border border-${statusColor}-500/30">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-bold text-${statusColor}-400">${result.imei}</h4>
+                            <span class="text-xs px-2 py-1 rounded bg-${statusColor}-500/20 text-${statusColor}-400">
+                                ${result.status.toUpperCase()}
+                            </span>
+                        </div>
+                        <div class="text-sm text-gray-300">
+                            <strong>Brand:</strong> ${result.data.brand || tacInfo.brand} | 
+                            <strong>Model:</strong> ${result.data.model || tacInfo.model} | 
+                            <strong>Type:</strong> ${result.data.type || tacInfo.type}
+                        </div>
+                        ${result.data.error ? `<div class="text-xs text-red-400 mt-1">Error: ${result.data.error}</div>` : ''}
+                    </div>
+                `;
+            });
+            
+            if (errors.length > 0) {
+                content += `
+                    <div class="mt-6 p-4 bg-red-900/20 rounded-lg border border-red-500/30">
+                        <h3 class="text-lg font-bold text-red-400 mb-3">⚠️ Errors</h3>
+                        <ul class="text-sm text-red-300 space-y-1">
+                            ${errors.map(error => `<li>${error.imei}: ${error.error}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            content += `
+                    <div class="mt-6 text-center">
+                        <button onclick="exportBatchResults()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg transition duration-300">
+                            📥 Export Results
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            resultContainer.innerHTML = content;
+            
+            // Store batch results for export
+            window.lastBatchResults = { results, errors, timestamp: new Date().toISOString() };
+        }
+        
+        function exportBatchResults() {
+            if (!window.lastBatchResults) {
+                alert('No batch results to export.');
+                return;
+            }
+            
+            const { results, errors, timestamp } = window.lastBatchResults;
+            
+            let csvContent = "IMEI,Status,Brand,Model,Type,API_Source,Error\n";
+            
+            results.forEach(result => {
+                const brand = result.data.brand || 'Unknown';
+                const model = result.data.model || 'Unknown';
+                const type = result.data.type || 'Unknown';
+                const apiSource = result.data.api_source || 'Offline';
+                const error = result.data.error || '';
+                
+                csvContent += `"${result.imei}","${result.status}","${brand}","${model}","${type}","${apiSource}","${error}"\n`;
+            });
+            
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `imei_batch_results_${timestamp.replace(/[:.]/g, '-')}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+        
         loadSearchHistory();
     </script>
 </body>
