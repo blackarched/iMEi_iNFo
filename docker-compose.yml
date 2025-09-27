@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  imei-tool:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+      - DATABASE_PATH=/app/data/imei_tool.db
+      - REDIS_URL=redis://redis:6379/0
+      - IMEI24_API_KEY=${IMEI24_API_KEY}
+      - CHECKMEND_API_KEY=${CHECKMEND_API_KEY}
+      - GSMARENA_API_KEY=${GSMARENA_API_KEY}
+      - DEVICECHECK_API_KEY=${DEVICECHECK_API_KEY}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - imei-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - imei-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - imei-tool
+    restart: unless-stopped
+    networks:
+      - imei-network
+
+volumes:
+  redis_data:
+
+networks:
+  imei-network:
+    driver: bridge
